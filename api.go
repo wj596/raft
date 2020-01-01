@@ -1118,3 +1118,11 @@ func (r *Raft) LeadershipTransferToServer(id ServerID, address ServerAddress) Fu
 
 	return r.initiateLeadershipTransfer(&id, &address)
 }
+
+
+// 获取follower的状态
+func (r *Raft) GetReplState() map[ServerID]*followerReplication {
+	return r.leaderState.replState
+}
+
+
