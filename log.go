@@ -10,12 +10,12 @@ const (
 	// LogNoop is used to assert leadership.
 	LogNoop
 
-	// LogAddPeerDeprecated is used to add a new peer. This should only be used with
+	// LogAddPeer is used to add a new peer. This should only be used with
 	// older protocol versions designed to be compatible with unversioned
 	// Raft servers. See comments in config.go for details.
 	LogAddPeerDeprecated
 
-	// LogRemovePeerDeprecated is used to remove an existing peer. This should only be
+	// LogRemovePeer is used to remove an existing peer. This should only be
 	// used with older protocol versions designed to be compatible with
 	// unversioned Raft servers. See comments in config.go for details.
 	LogRemovePeerDeprecated

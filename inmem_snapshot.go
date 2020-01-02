@@ -100,12 +100,10 @@ func (s *InmemSnapshotSink) Close() error {
 	return nil
 }
 
-// ID returns the ID of the SnapshotMeta
 func (s *InmemSnapshotSink) ID() string {
 	return s.meta.ID
 }
 
-// Cancel returns successfully with a nil error
 func (s *InmemSnapshotSink) Cancel() error {
 	return nil
 }

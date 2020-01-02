@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	TTInmem = iota
+	TT_Inmem = iota
 
 	// NOTE: must be last
 	numTestTransports
@@ -16,8 +16,9 @@ const (
 
 func NewTestTransport(ttype int, addr ServerAddress) (ServerAddress, LoopbackTransport) {
 	switch ttype {
-	case TTInmem:
-		return NewInmemTransport(addr)
+	case TT_Inmem:
+		addr, lt := NewInmemTransport(addr)
+		return addr, lt
 	default:
 		panic("Unknown transport type")
 	}
@@ -45,7 +46,7 @@ func TestTransport_AppendEntries(t *testing.T) {
 			PrevLogEntry: 100,
 			PrevLogTerm:  4,
 			Entries: []*Log{
-				{
+				&Log{
 					Index: 101,
 					Term:  4,
 					Type:  LogNoop,
@@ -107,7 +108,7 @@ func TestTransport_AppendEntriesPipeline(t *testing.T) {
 			PrevLogEntry: 100,
 			PrevLogTerm:  4,
 			Entries: []*Log{
-				{
+				&Log{
 					Index: 101,
 					Term:  4,
 					Type:  LogNoop,

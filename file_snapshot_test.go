@@ -194,17 +194,14 @@ func TestFileSS_CancelSnapshot(t *testing.T) {
 }
 
 func TestFileSS_Retention(t *testing.T) {
-	var err error
 	// Create a test dir
-	var dir string
-	dir, err = ioutil.TempDir("", "raft")
+	dir, err := ioutil.TempDir("", "raft")
 	if err != nil {
 		t.Fatalf("err: %v ", err)
 	}
 	defer os.RemoveAll(dir)
 
-	var snap *FileSnapshotStore
-	snap, err = NewFileSnapshotStoreWithLogger(dir, 2, newTestLogger(t))
+	snap, err := NewFileSnapshotStoreWithLogger(dir, 2, newTestLogger(t))
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -212,8 +209,7 @@ func TestFileSS_Retention(t *testing.T) {
 	// Create a few snapshots
 	_, trans := NewInmemTransport(NewInmemAddr())
 	for i := 10; i < 15; i++ {
-		var sink SnapshotSink
-		sink, err = snap.Create(SnapshotVersionMax, uint64(i), 3, Configuration{}, 0, trans)
+		sink, err := snap.Create(SnapshotVersionMax, uint64(i), 3, Configuration{}, 0, trans)
 		if err != nil {
 			t.Fatalf("err: %v", err)
 		}
@@ -224,8 +220,7 @@ func TestFileSS_Retention(t *testing.T) {
 	}
 
 	// Should only have 2 listed!
-	var snaps []*SnapshotMeta
-	snaps, err = snap.List()
+	snaps, err := snap.List()
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -243,32 +238,29 @@ func TestFileSS_Retention(t *testing.T) {
 }
 
 func TestFileSS_BadPerm(t *testing.T) {
-	var err error
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping file permission test on windows")
 	}
 
 	// Create a temp dir
-	var dir1 string
-	dir1, err = ioutil.TempDir("", "raft")
+	dir1, err := ioutil.TempDir("", "raft")
 	if err != nil {
 		t.Fatalf("err: %s", err)
 	}
 	defer os.RemoveAll(dir1)
 
 	// Create a sub dir and remove all permissions
-	var dir2 string
-	dir2, err = ioutil.TempDir(dir1, "badperm")
+	dir2, err := ioutil.TempDir(dir1, "badperm")
 	if err != nil {
 		t.Fatalf("err: %s", err)
 	}
-	if err = os.Chmod(dir2, 000); err != nil {
+	if err := os.Chmod(dir2, 000); err != nil {
 		t.Fatalf("err: %s", err)
 	}
 	defer os.Chmod(dir2, 777) // Set perms back for delete
 
 	// Should fail
-	if _, err = NewFileSnapshotStore(dir2, 3, nil); err == nil {
+	if _, err := NewFileSnapshotStore(dir2, 3, nil); err == nil {
 		t.Fatalf("should fail to use dir with bad perms")
 	}
 }

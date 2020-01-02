@@ -9,8 +9,9 @@ import (
 	"sync"
 	"time"
 
-	metrics "github.com/armon/go-metrics"
-	hclog "github.com/hashicorp/go-hclog"
+	"github.com/hashicorp/go-hclog"
+
+	"github.com/armon/go-metrics"
 )
 
 const (
@@ -51,7 +52,7 @@ var (
 	ErrEnqueueTimeout = errors.New("timed out enqueuing operation")
 
 	// ErrNothingNewToSnapshot is returned when trying to create a snapshot
-	// but there's nothing new committed to the FSM since we started.
+	// but there's nothing new commited to the FSM since we started.
 	ErrNothingNewToSnapshot = errors.New("nothing new to snapshot")
 
 	// ErrUnsupportedProtocol is returned when an operation is attempted
@@ -233,7 +234,7 @@ func BootstrapCluster(conf *Config, logs LogStore, stable StableStore,
 		entry.Data = encodePeers(configuration, trans)
 	} else {
 		entry.Type = LogConfiguration
-		entry.Data = EncodeConfiguration(configuration)
+		entry.Data = encodeConfiguration(configuration)
 	}
 	if err := logs.StoreLog(entry); err != nil {
 		return fmt.Errorf("failed to append configuration entry to log: %v", err)
@@ -287,36 +288,37 @@ func RecoverCluster(conf *Config, fsm FSM, logs LogStore, stable StableStore,
 	// expect data to be there and it's not. By refusing, we force them
 	// to show intent to start a cluster fresh by explicitly doing a
 	// bootstrap, rather than quietly fire up a fresh cluster here.
-	if hasState, err := HasExistingState(logs, stable, snaps); err != nil {
+	hasState, err := HasExistingState(logs, stable, snaps)
+	if err != nil {
 		return fmt.Errorf("failed to check for existing state: %v", err)
-	} else if !hasState {
+	}
+	if !hasState {
 		return fmt.Errorf("refused to recover cluster with no initial state, this is probably an operator error")
 	}
 
 	// Attempt to restore any snapshots we find, newest to oldest.
-	var (
-		snapshotIndex  uint64
-		snapshotTerm   uint64
-		snapshots, err = snaps.List()
-	)
+	var snapshotIndex uint64
+	var snapshotTerm uint64
+	snapshots, err := snaps.List()
 	if err != nil {
 		return fmt.Errorf("failed to list snapshots: %v", err)
 	}
 	for _, snapshot := range snapshots {
-		var source io.ReadCloser
-		_, source, err = snaps.Open(snapshot.ID)
-		if err != nil {
-			// Skip this one and try the next. We will detect if we
-			// couldn't open any snapshots.
-			continue
-		}
+		if !conf.NoSnapshotRestoreOnStart {
+			_, source, err := snaps.Open(snapshot.ID)
+			if err != nil {
+				// Skip this one and try the next. We will detect if we
+				// couldn't open any snapshots.
+				continue
+			}
 
-		err = fsm.Restore(source)
-		// Close the source after the restore has completed
-		source.Close()
-		if err != nil {
-			// Same here, skip and try the next one.
-			continue
+			err = fsm.Restore(source)
+			// Close the source after the restore has completed
+			source.Close()
+			if err != nil {
+				// Same here, skip and try the next one.
+				continue
+			}
 		}
 
 		snapshotIndex = snapshot.Index
@@ -339,7 +341,7 @@ func RecoverCluster(conf *Config, fsm FSM, logs LogStore, stable StableStore,
 	}
 	for index := snapshotIndex + 1; index <= lastLogIndex; index++ {
 		var entry Log
-		if err = logs.GetLog(index, &entry); err != nil {
+		if err := logs.GetLog(index, &entry); err != nil {
 			return fmt.Errorf("failed to get log at index %d: %v", index, err)
 		}
 		if entry.Type == LogCommand {
@@ -360,10 +362,10 @@ func RecoverCluster(conf *Config, fsm FSM, logs LogStore, stable StableStore,
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot: %v", err)
 	}
-	if err = snapshot.Persist(sink); err != nil {
+	if err := snapshot.Persist(sink); err != nil {
 		return fmt.Errorf("failed to persist snapshot: %v", err)
 	}
-	if err = sink.Close(); err != nil {
+	if err := sink.Close(); err != nil {
 		return fmt.Errorf("failed to finalize snapshot: %v", err)
 	}
 
@@ -380,23 +382,6 @@ func RecoverCluster(conf *Config, fsm FSM, logs LogStore, stable StableStore,
 	return nil
 }
 
-// GetConfiguration returns the configuration of the Raft cluster without
-// starting a Raft instance or connecting to the cluster
-// This function has identical behavior to Raft.GetConfiguration
-func GetConfiguration(conf *Config, fsm FSM, logs LogStore, stable StableStore,
-	snaps SnapshotStore, trans Transport) (Configuration, error) {
-	conf.skipStartup = true
-	r, err := NewRaft(conf, fsm, logs, stable, snaps, trans)
-	if err != nil {
-		return Configuration{}, err
-	}
-	future := r.GetConfiguration()
-	if err = future.Error(); err != nil {
-		return Configuration{}, err
-	}
-	return future.Configuration(), nil
-}
-
 // HasExistingState returns true if the server has any existing state (logs,
 // knowledge of a current term, or any snapshots).
 func HasExistingState(logs LogStore, stable StableStore, snaps SnapshotStore) (bool, error) {
@@ -407,7 +392,7 @@ func HasExistingState(logs LogStore, stable StableStore, snaps SnapshotStore) (b
 			return true, nil
 		}
 	} else {
-		if err != ErrKeyNotFound {
+		if err.Error() != "not found" {
 			return false, fmt.Errorf("failed to read current term: %v", err)
 		}
 	}
@@ -461,7 +446,7 @@ func NewRaft(conf *Config, fsm FSM, logs LogStore, stable StableStore, snaps Sna
 
 	// Try to restore the current term.
 	currentTerm, err := stable.GetUint64(keyCurrentTerm)
-	if err != nil && err != ErrKeyNotFound {
+	if err != nil && err.Error() != "not found" {
 		return nil, fmt.Errorf("failed to load current term: %v", err)
 	}
 
@@ -543,23 +528,19 @@ func NewRaft(conf *Config, fsm FSM, logs LogStore, stable StableStore, snaps Sna
 	for index := snapshotIndex + 1; index <= lastLog.Index; index++ {
 		var entry Log
 		if err := r.logs.GetLog(index, &entry); err != nil {
-			r.logger.Error("failed to get log", "index", index, "error", err)
+			r.logger.Error(fmt.Sprintf("Failed to get log at %d: %v", index, err))
 			panic(err)
 		}
 		r.processConfigurationLogEntry(&entry)
 	}
-	r.logger.Info("initial configuration",
-		"index", r.configurations.latestIndex,
-		"servers", hclog.Fmt("%+v", r.configurations.latest.Servers))
+	r.logger.Info(fmt.Sprintf("Initial configuration (index=%d): %+v",
+		r.configurations.latestIndex, r.configurations.latest.Servers))
 
 	// Setup a heartbeat fast-path to avoid head-of-line
 	// blocking where possible. It MUST be safe for this
 	// to be called concurrently with a blocking RPC.
 	trans.SetHeartbeatHandler(r.processHeartbeat)
 
-	if conf.skipStartup {
-		return r, nil
-	}
 	// Start the background work.
 	r.goFunc(r.run)
 	r.goFunc(r.runFSM)
@@ -573,7 +554,7 @@ func NewRaft(conf *Config, fsm FSM, logs LogStore, stable StableStore, snaps Sna
 func (r *Raft) restoreSnapshot() error {
 	snapshots, err := r.snapshots.List()
 	if err != nil {
-		r.logger.Error("failed to list snapshots", "error", err)
+		r.logger.Error(fmt.Sprintf("Failed to list snapshots: %v", err))
 		return err
 	}
 
@@ -582,7 +563,7 @@ func (r *Raft) restoreSnapshot() error {
 		if !r.conf.NoSnapshotRestoreOnStart {
 			_, source, err := r.snapshots.Open(snapshot.ID)
 			if err != nil {
-				r.logger.Error("failed to open snapshot", "id", snapshot.ID, "error", err)
+				r.logger.Error(fmt.Sprintf("Failed to open snapshot %v: %v", snapshot.ID, err))
 				continue
 			}
 
@@ -590,11 +571,11 @@ func (r *Raft) restoreSnapshot() error {
 			// Close the source after the restore has completed
 			source.Close()
 			if err != nil {
-				r.logger.Error("failed to restore snapshot", "id", snapshot.ID, "error", err)
+				r.logger.Error(fmt.Sprintf("Failed to restore snapshot %v: %v", snapshot.ID, err))
 				continue
 			}
 
-			r.logger.Info("restored from snapshot", "id", snapshot.ID)
+			r.logger.Info(fmt.Sprintf("Restored from snapshot %v", snapshot.ID))
 		}
 		// Update the lastApplied so we don't replay old logs
 		r.setLastApplied(snapshot.Index)
@@ -701,7 +682,7 @@ func (r *Raft) ApplyLog(log Log, timeout time.Duration) ApplyFuture {
 	}
 }
 
-// Barrier is used to issue a command that blocks until all preceding
+// Barrier is used to issue a command that blocks until all preceeding
 // operations have been applied to the FSM. It can be used to ensure the
 // FSM reflects all queued writes. An optional timeout can be provided to
 // limit the amount of time we wait for the command to be started. This
@@ -1032,7 +1013,7 @@ func (r *Raft) Stats() map[string]string {
 
 	future := r.GetConfiguration()
 	if err := future.Error(); err != nil {
-		r.logger.Warn("could not get configuration for stats", "error", err)
+		r.logger.Warn(fmt.Sprintf("could not get configuration for Stats: %v", err))
 	} else {
 		configuration := future.Configuration()
 		s["latest_configuration_index"] = toString(future.Index())
@@ -1119,10 +1100,7 @@ func (r *Raft) LeadershipTransferToServer(id ServerID, address ServerAddress) Fu
 	return r.initiateLeadershipTransfer(&id, &address)
 }
 
-
 // 获取follower的状态
 func (r *Raft) GetReplState() map[ServerID]*followerReplication {
 	return r.leaderState.replState
 }
-
-

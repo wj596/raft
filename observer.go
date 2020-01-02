@@ -18,7 +18,7 @@ type Observation struct {
 
 // LeaderObservation is used for the data when leadership changes.
 type LeaderObservation struct {
-	Leader ServerAddress
+	leader ServerAddress
 }
 
 // PeerObservation is sent to observers when peers change.

@@ -10,16 +10,14 @@ import (
 )
 
 func TestPeersJSON_BadConfiguration(t *testing.T) {
-	var err error
-	var base string
-	base, err = ioutil.TempDir("", "")
+	base, err := ioutil.TempDir("", "")
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
 	defer os.RemoveAll(base)
 
 	peers := filepath.Join(base, "peers.json")
-	if err = ioutil.WriteFile(peers, []byte("null"), 0666); err != nil {
+	if err := ioutil.WriteFile(peers, []byte("null"), 0666); err != nil {
 		t.Fatalf("err: %v", err)
 	}
 
@@ -30,9 +28,7 @@ func TestPeersJSON_BadConfiguration(t *testing.T) {
 }
 
 func TestPeersJSON_ReadPeersJSON(t *testing.T) {
-	var err error
-	var base string
-	base, err = ioutil.TempDir("", "")
+	base, err := ioutil.TempDir("", "")
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -44,28 +40,28 @@ func TestPeersJSON_ReadPeersJSON(t *testing.T) {
  "127.0.0.3:123"]
 `)
 	peers := filepath.Join(base, "peers.json")
-	if err = ioutil.WriteFile(peers, content, 0666); err != nil {
+	if err := ioutil.WriteFile(peers, content, 0666); err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	var configuration Configuration
-	configuration, err = ReadPeersJSON(peers)
+
+	configuration, err := ReadPeersJSON(peers)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
 
 	expected := Configuration{
 		Servers: []Server{
-			{
+			Server{
 				Suffrage: Voter,
 				ID:       ServerID("127.0.0.1:123"),
 				Address:  ServerAddress("127.0.0.1:123"),
 			},
-			{
+			Server{
 				Suffrage: Voter,
 				ID:       ServerID("127.0.0.2:123"),
 				Address:  ServerAddress("127.0.0.2:123"),
 			},
-			{
+			Server{
 				Suffrage: Voter,
 				ID:       ServerID("127.0.0.3:123"),
 				Address:  ServerAddress("127.0.0.3:123"),
@@ -78,9 +74,7 @@ func TestPeersJSON_ReadPeersJSON(t *testing.T) {
 }
 
 func TestPeersJSON_ReadConfigJSON(t *testing.T) {
-	var err error
-	var base string
-	base, err = ioutil.TempDir("", "")
+	base, err := ioutil.TempDir("", "")
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -105,29 +99,28 @@ func TestPeersJSON_ReadConfigJSON(t *testing.T) {
 ]
 `)
 	peers := filepath.Join(base, "peers.json")
-	if err = ioutil.WriteFile(peers, content, 0666); err != nil {
+	if err := ioutil.WriteFile(peers, content, 0666); err != nil {
 		t.Fatalf("err: %v", err)
 	}
 
-	var configuration Configuration
-	configuration, err = ReadConfigJSON(peers)
+	configuration, err := ReadConfigJSON(peers)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
 
 	expected := Configuration{
 		Servers: []Server{
-			{
+			Server{
 				Suffrage: Voter,
 				ID:       ServerID("adf4238a-882b-9ddc-4a9d-5b6758e4159e"),
 				Address:  ServerAddress("127.0.0.1:123"),
 			},
-			{
+			Server{
 				Suffrage: Voter,
 				ID:       ServerID("8b6dda82-3103-11e7-93ae-92361f002671"),
 				Address:  ServerAddress("127.0.0.2:123"),
 			},
-			{
+			Server{
 				Suffrage: Nonvoter,
 				ID:       ServerID("97e17742-3103-11e7-93ae-92361f002671"),
 				Address:  ServerAddress("127.0.0.3:123"),

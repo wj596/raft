@@ -77,14 +77,14 @@ func (r *Raft) runSnapshots() {
 
 			// Trigger a snapshot
 			if _, err := r.takeSnapshot(); err != nil {
-				r.logger.Error("failed to take snapshot", "error", err)
+				r.logger.Error(fmt.Sprintf("Failed to take snapshot: %v", err))
 			}
 
 		case future := <-r.userSnapshotCh:
 			// User-triggered, run immediately
 			id, err := r.takeSnapshot()
 			if err != nil {
-				r.logger.Error("failed to take snapshot", "error", err)
+				r.logger.Error(fmt.Sprintf("Failed to take snapshot: %v", err))
 			} else {
 				future.opener = func() (*SnapshotMeta, io.ReadCloser, error) {
 					return r.snapshots.Open(id)
@@ -107,7 +107,7 @@ func (r *Raft) shouldSnapshot() bool {
 	// Check the last log index
 	lastIdx, err := r.logs.LastIndex()
 	if err != nil {
-		r.logger.Error("failed to get last log index", "error", err)
+		r.logger.Error(fmt.Sprintf("Failed to get last log index: %v", err))
 		return false
 	}
 
@@ -172,7 +172,7 @@ func (r *Raft) takeSnapshot() (string, error) {
 	}
 
 	// Create a new snapshot.
-	r.logger.Info("starting snapshot up to", "index", snapReq.index)
+	r.logger.Info(fmt.Sprintf("Starting snapshot up to %d", snapReq.index))
 	start := time.Now()
 	version := getSnapshotVersion(r.protocolVersion)
 	sink, err := r.snapshots.Create(version, snapReq.index, snapReq.term, committed, committedIndex, r.trans)
@@ -202,7 +202,7 @@ func (r *Raft) takeSnapshot() (string, error) {
 		return "", err
 	}
 
-	r.logger.Info("snapshot complete up to", "index", snapReq.index)
+	r.logger.Info(fmt.Sprintf("Snapshot to %d complete", snapReq.index))
 	return sink.ID(), nil
 }
 
@@ -228,12 +228,8 @@ func (r *Raft) compactLogs(snapIdx uint64) error {
 	// after the snapshot to be removed.
 	maxLog := min(snapIdx, lastLogIdx-r.conf.TrailingLogs)
 
-	if minLog > maxLog {
-		r.logger.Info("no logs to truncate")
-		return nil
-	}
-
-	r.logger.Info("compacting logs", "from", minLog, "to", maxLog)
+	// Log this
+	r.logger.Info(fmt.Sprintf("Compacting logs from %d to %d", minLog, maxLog))
 
 	// Compact the logs
 	if err := r.logs.DeleteRange(minLog, maxLog); err != nil {

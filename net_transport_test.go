@@ -3,8 +3,8 @@ package raft
 import (
 	"bytes"
 	"fmt"
-	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/require"
+	"log"
 	"net"
 	"reflect"
 	"strings"
@@ -38,7 +38,7 @@ func TestNetworkTransport_CloseStreams(t *testing.T) {
 		PrevLogEntry: 100,
 		PrevLogTerm:  4,
 		Entries: []*Log{
-			{
+			&Log{
 				Index: 101,
 				Term:  4,
 				Type:  LogNoop,
@@ -76,8 +76,8 @@ func TestNetworkTransport_CloseStreams(t *testing.T) {
 		t.Fatalf("err: %v", err)
 	}
 	defer trans2.Close()
-	var i int
-	for i = 0; i < 2; i++ {
+
+	for i := 0; i < 2; i++ {
 		// Create wait group
 		wg := &sync.WaitGroup{}
 		wg.Add(5)
@@ -96,7 +96,7 @@ func TestNetworkTransport_CloseStreams(t *testing.T) {
 		}
 
 		// Try to do parallel appends, should stress the conn pool
-		for i = 0; i < 5; i++ {
+		for i := 0; i < 5; i++ {
 			go appendFunc()
 		}
 
@@ -199,7 +199,7 @@ func TestNetworkTransport_AppendEntries(t *testing.T) {
 			PrevLogEntry: 100,
 			PrevLogTerm:  4,
 			Entries: []*Log{
-				{
+				&Log{
 					Index: 101,
 					Term:  4,
 					Type:  LogNoop,
@@ -268,7 +268,7 @@ func TestNetworkTransport_AppendEntriesPipeline(t *testing.T) {
 			PrevLogEntry: 100,
 			PrevLogTerm:  4,
 			Entries: []*Log{
-				{
+				&Log{
 					Index: 101,
 					Term:  4,
 					Type:  LogNoop,
@@ -351,7 +351,7 @@ func TestNetworkTransport_AppendEntriesPipeline_CloseStreams(t *testing.T) {
 		PrevLogEntry: 100,
 		PrevLogTerm:  4,
 		Entries: []*Log{
-			{
+			&Log{
 				Index: 101,
 				Term:  4,
 				Type:  LogNoop,
@@ -625,7 +625,7 @@ func TestNetworkTransport_PooledConn(t *testing.T) {
 		PrevLogEntry: 100,
 		PrevLogTerm:  4,
 		Entries: []*Log{
-			{
+			&Log{
 				Index: 101,
 				Term:  4,
 				Type:  LogNoop,
@@ -711,7 +711,7 @@ type testCountingWriter struct {
 
 func (tw testCountingWriter) Write(p []byte) (n int, err error) {
 	atomic.AddInt32(tw.numCalls, 1)
-	if !strings.Contains(string(p), "failed to accept connection") {
+	if !strings.Contains(string(p), "raft-net: Failed to accept connection") {
 		tw.t.Error("did not receive expected log message")
 	}
 	tw.t.Log("countingWriter:", string(p))
@@ -752,11 +752,7 @@ func TestNetworkTransport_ListenBackoff(t *testing.T) {
 	var numAccepts int32
 	var numLogs int32
 	countingWriter := testCountingWriter{t, &numLogs}
-	countingLogger := hclog.New(&hclog.LoggerOptions{
-		Name:   "test",
-		Output: countingWriter,
-		Level:  hclog.DefaultLevel,
-	})
+	countingLogger := log.New(countingWriter, "test", log.LstdFlags)
 	transport := NetworkTransport{
 		logger:     countingLogger,
 		stream:     testCountingStreamLayer{&numAccepts},
